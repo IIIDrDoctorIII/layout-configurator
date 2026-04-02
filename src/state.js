@@ -1,97 +1,121 @@
 // src/state.js
-import { canvas, applyDesignationStyles, drawGrid } from './canvas.js';
+import { canvas, gridGroup, applyDesignationStyles } from './canvas.js';
 
-// The custom properties we need Fabric to remember when saving
-export const customProps = ['customName', 'customDesc', 'customDesignation', 'customColor', 'customLocked', 'customStrokeWidth', 'id'];
+let history = [];
+let redoStack = [];
+let isRestoring = false;
+let historyCallback = null;
 
-let stateHistory = [];
-let historyIndex = -1;
-let isHistoryProcessing = false;
+// Custom properties to preserve during JSON export/import
+export const customProps = [
+    'customName', 
+    'customColor', 
+    'customDesignation', 
+    'customLocked', 
+    'customStrokeWidth', 
+    'id', 
+    'selectable', 
+    'evented',
+    'lockScalingX',
+    'lockScalingY'
+];
 
-// UI hook to update button disabled states
-export let onHistoryChange = () => {};
-
-export function setHistoryCallback(callback) {
-    onHistoryChange = callback;
+export function setHistoryCallback(cb) {
+    historyCallback = cb;
 }
 
 export function saveState() {
-    if (isHistoryProcessing) return;
-    if (historyIndex < stateHistory.length - 1) { 
-        stateHistory = stateHistory.slice(0, historyIndex + 1); 
+    if (isRestoring) return;
+    
+    // Create a snapshot of the canvas (excluding the grid)
+    const json = canvas.toJSON(customProps);
+    
+    // Only save if the state has actually changed
+    if (history.length > 0 && history[history.length - 1] === JSON.stringify(json)) {
+        return;
     }
-    stateHistory.push(JSON.stringify(canvas.toJSON(customProps)));
-    historyIndex++;
-    onHistoryChange(historyIndex > 0, historyIndex < stateHistory.length - 1);
+
+    history.push(JSON.stringify(json));
+    redoStack = []; // Clear redo stack on new action
+    
+    if (history.length > 50) history.shift(); // Limit history size
+    
+    if (historyCallback) {
+        historyCallback(history.length > 1, redoStack.length > 0);
+    }
 }
 
 export function undo() {
-    if (historyIndex > 0) {
-        isHistoryProcessing = true;
-        historyIndex--;
-        canvas.loadFromJSON(stateHistory[historyIndex], function() {
-            canvas.getObjects().forEach(obj => { 
-                if (obj.customDesignation) applyDesignationStyles(obj, obj.customDesignation); 
-            });
-            drawGrid(); 
-            canvas.requestRenderAll();
-            isHistoryProcessing = false; 
-            onHistoryChange(historyIndex > 0, historyIndex < stateHistory.length - 1);
-        });
-    }
+    if (history.length <= 1) return;
+    
+    isRestoring = true;
+    const currentState = history.pop();
+    redoStack.push(currentState);
+    
+    const previousState = history[history.length - 1];
+    renderState(previousState);
 }
 
 export function redo() {
-    if (historyIndex < stateHistory.length - 1) {
-        isHistoryProcessing = true;
-        historyIndex++;
-        canvas.loadFromJSON(stateHistory[historyIndex], function() {
-            canvas.getObjects().forEach(obj => { 
-                if (obj.customDesignation) applyDesignationStyles(obj, obj.customDesignation); 
-            });
-            drawGrid(); 
-            canvas.requestRenderAll();
-            isHistoryProcessing = false; 
-            onHistoryChange(historyIndex > 0, historyIndex < stateHistory.length - 1);
-        });
-    }
+    if (redoStack.length === 0) return;
+    
+    isRestoring = true;
+    const nextState = redoStack.pop();
+    history.push(nextState);
+    
+    renderState(nextState);
 }
 
-// Generates a timestamp for the filename
-function generateTimestamp() {
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    const datePart = `${pad(now.getMonth() + 1)}${pad(now.getDate())}${String(now.getFullYear()).slice(-2)}`;
-    const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    return `${datePart}-${timePart}`;
+function renderState(stateJSON) {
+    canvas.loadFromJSON(stateJSON, () => {
+        // Post-load cleanup
+        canvas.getObjects().forEach(obj => {
+            if (obj.id === 'grid_overlay') {
+                canvas.remove(obj);
+            } else {
+                // Re-apply visual styles based on saved designations
+                applyDesignationStyles(obj, obj.customDesignation || 'object');
+                // Ensure locked items stay locked
+                if (obj.customLocked) {
+                    obj.selectable = false;
+                    obj.evented = false;
+                }
+            }
+        });
+
+        // Ensure the grid is always at the bottom if it exists
+        if (gridGroup) {
+            canvas.sendToBack(gridGroup);
+        }
+        
+        canvas.requestRenderAll();
+        isRestoring = false;
+        
+        if (historyCallback) {
+            historyCallback(history.length > 1, redoStack.length > 0);
+        }
+    });
 }
 
 export function exportJSON(projectName) {
     const json = canvas.toJSON(customProps);
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(json));
-    const dlAnchorElem = document.createElement('a');
-    
-    let safeProjectName = projectName ? projectName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '') : 'Untitled';
-    let timestamp = generateTimestamp();
-    let fileName = `LC-${safeProjectName}-${timestamp}.json`;
-
-    dlAnchorElem.setAttribute("href", dataStr);
-    dlAnchorElem.setAttribute("download", fileName); 
-    dlAnchorElem.click();
+    const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `LC-${projectName || 'Untitled'}-${new Date().getTime()}.json`;
+    a.click();
 }
 
 export function loadJSON(file) {
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = function(f) { 
-        canvas.loadFromJSON(f.target.result, function() { 
-            canvas.getObjects().forEach(obj => { 
-                if (obj.customDesignation) applyDesignationStyles(obj, obj.customDesignation); 
-            });
-            drawGrid(); 
-            canvas.requestRenderAll(); 
-            saveState(); 
-        }); 
+    reader.onload = (e) => {
+        renderState(e.target.result);
+        // Reset history for the new file
+        history = [e.target.result];
+        redoStack = [];
+        saveState();
     };
     reader.readAsText(file);
 }

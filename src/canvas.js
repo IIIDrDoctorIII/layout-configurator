@@ -40,7 +40,7 @@ export function drawGrid() {
         evented: false, 
         id: 'grid_overlay', 
         visible: showGrid,
-        excludeFromExport: true // <-- This prevents the grid from ever saving to JSON!
+        excludeFromExport: true 
     });
     
     canvas.add(gridGroup);
@@ -215,7 +215,7 @@ export function togglePanMode() {
     canvas.requestRenderAll();
 }
 
-// Mouse Wheel Zoom & Alt-Drag Pan
+// Mouse Wheel Zoom & Alt-Drag Pan (Desktop)
 canvas.on('mouse:down', function(opt) { 
     if ((isPanMode || opt.e.altKey) && !opt.e.touches) { 
         isDragging = true; lastPosX = opt.e.clientX; lastPosY = opt.e.clientY; 
@@ -240,53 +240,79 @@ canvas.on('mouse:wheel', function(opt) {
     opt.e.preventDefault(); opt.e.stopPropagation();
 });
 
-// Mobile Touch Gestures
-let touchState = { pinching: false, initialDistance: 0, initialZoom: 1, lastMidpoint: { x: 0, y: 0 } };
-function getTouchDistance(touches) { return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY); }
-function getTouchMidpoint(touches) { return { x: (touches[0].clientX + touches[1].clientX) / 2, y: (touches[0].clientY + touches[1].clientY) / 2 }; }
+// --- NATIVE MOBILE TOUCH GESTURES ---
+export function initTouchGestures() {
+    const wrapper = document.querySelector('.canvas-container');
+    if (!wrapper) return;
 
-canvas.on('touchstart', function(opt) {
-    if (!opt.e.touches) return;
-    if (opt.e.touches.length === 2) {
-        opt.e.preventDefault();
-        touchState.pinching = true; touchState.initialDistance = getTouchDistance(opt.e.touches);
-        touchState.initialZoom = canvas.getZoom(); touchState.lastMidpoint = getTouchMidpoint(opt.e.touches);
-        canvas.selection = false;
-    } else if (opt.e.touches.length === 1 && isPanMode) {
-        opt.e.preventDefault(); isDragging = true;
-        lastPosX = opt.e.touches[0].clientX; lastPosY = opt.e.touches[0].clientY;
-    }
-});
+    let touchState = { pinching: false, initialDistance: 0, initialZoom: 1, lastMidpoint: { x: 0, y: 0 } };
 
-canvas.on('touchmove', function(opt) {
-    if (!opt.e.touches) return;
-    if (touchState.pinching && opt.e.touches.length === 2) {
-        opt.e.preventDefault();
-        const currentDistance = getTouchDistance(opt.e.touches); const currentMidpoint = getTouchMidpoint(opt.e.touches);
-        let newZoom = touchState.initialZoom * (currentDistance / touchState.initialDistance);
-        if (newZoom > 5) newZoom = 5; if (newZoom < 0.2) newZoom = 0.2;
-        canvas.zoomToPoint({ x: currentMidpoint.x, y: currentMidpoint.y }, newZoom);
-        let vpt = canvas.viewportTransform;
-        vpt[4] += currentMidpoint.x - touchState.lastMidpoint.x; vpt[5] += currentMidpoint.y - touchState.lastMidpoint.y;
-        canvas.requestRenderAll(); touchState.lastMidpoint = currentMidpoint;
-    } else if (isDragging && isPanMode && opt.e.touches.length === 1) {
-        opt.e.preventDefault();
-        let vpt = canvas.viewportTransform;
-        vpt[4] += opt.e.touches[0].clientX - lastPosX; vpt[5] += opt.e.touches[0].clientY - lastPosY;
-        canvas.requestRenderAll(); lastPosX = opt.e.touches[0].clientX; lastPosY = opt.e.touches[0].clientY;
-    }
-});
+    function getTouchDistance(touches) { return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY); }
+    function getTouchMidpoint(touches) { return { x: (touches[0].clientX + touches[1].clientX) / 2, y: (touches[0].clientY + touches[1].clientY) / 2 }; }
 
-canvas.on('touchend', function(opt) {
-    if (!opt.e.touches) return;
-    if (touchState.pinching && opt.e.touches.length < 2) {
-        touchState.pinching = false; canvas.setViewportTransform(canvas.viewportTransform);
-        if (!isPanMode) canvas.selection = true;
-    }
-    if (isDragging && opt.e.touches.length === 0) { isDragging = false; canvas.setViewportTransform(canvas.viewportTransform); }
-});
+    wrapper.addEventListener('touchstart', function(e) {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            touchState.pinching = true; 
+            touchState.initialDistance = getTouchDistance(e.touches);
+            touchState.initialZoom = canvas.getZoom(); 
+            touchState.lastMidpoint = getTouchMidpoint(e.touches);
+            canvas.selection = false;
+        } else if (e.touches.length === 1 && isPanMode) {
+            e.preventDefault(); 
+            isDragging = true;
+            lastPosX = e.touches[0].clientX; 
+            lastPosY = e.touches[0].clientY;
+        }
+    }, { passive: false });
 
-// Utilities
+    wrapper.addEventListener('touchmove', function(e) {
+        if (touchState.pinching && e.touches.length === 2) {
+            e.preventDefault();
+            const currentDistance = getTouchDistance(e.touches); 
+            const currentMidpoint = getTouchMidpoint(e.touches);
+            
+            // Handle Zoom
+            let newZoom = touchState.initialZoom * (currentDistance / touchState.initialDistance);
+            if (newZoom > 5) newZoom = 5; if (newZoom < 0.2) newZoom = 0.2;
+            canvas.zoomToPoint({ x: currentMidpoint.x, y: currentMidpoint.y }, newZoom);
+            
+            // Handle simultaneous 2-Finger Pan
+            let vpt = canvas.viewportTransform;
+            vpt[4] += currentMidpoint.x - touchState.lastMidpoint.x; 
+            vpt[5] += currentMidpoint.y - touchState.lastMidpoint.y;
+            
+            canvas.requestRenderAll(); 
+            touchState.lastMidpoint = currentMidpoint;
+            
+        } else if (isDragging && isPanMode && e.touches.length === 1) {
+            e.preventDefault();
+            let vpt = canvas.viewportTransform;
+            vpt[4] += e.touches[0].clientX - lastPosX; 
+            vpt[5] += e.touches[0].clientY - lastPosY;
+            canvas.requestRenderAll(); 
+            lastPosX = e.touches[0].clientX; 
+            lastPosY = e.touches[0].clientY;
+        }
+    }, { passive: false });
+
+    wrapper.addEventListener('touchend', function(e) {
+        if (touchState.pinching && e.touches.length < 2) {
+            touchState.pinching = false; 
+            canvas.setViewportTransform(canvas.viewportTransform);
+            if (!isPanMode) canvas.selection = true;
+        }
+        if (isDragging && e.touches.length === 0) { 
+            isDragging = false; 
+            canvas.setViewportTransform(canvas.viewportTransform); 
+        }
+    }, { passive: false });
+}
+
+// Bind native touch gestures shortly after canvas initialization
+setTimeout(initTouchGestures, 200);
+
+// --- Utilities ---
 export function duplicateSelected(customPropsArray) {
     const activeObject = canvas.getActiveObject();
     if (!activeObject) return;
