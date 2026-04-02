@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Layout Configurator</title>
+    <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+
+    <div id="toolbar">
+        <div class="section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h2 style="margin: 0;">Layout Configurator</h2>
+                <div style="display: flex; gap: 4px;">
+                    <button class="warning" style="display:inline-block; width:auto; padding: 4px 10px; color: #fff;" id="btn-help">Help</button>
+                    <button id="btn-undo" class="secondary" style="display:inline-block; width:auto; padding: 4px 10px;" disabled>Undo</button>
+                    <button id="btn-redo" class="secondary" style="display:inline-block; width:auto; padding: 4px 10px;" disabled>Redo</button>
+                </div>
+            </div>
+
+            <div class="controls-grid-3" style="margin-bottom: 10px;">
+                <button class="secondary" id="btn-zoom-in">Zoom In</button>
+                <button class="secondary" id="btn-zoom-out">Zoom Out</button>
+                <button id="btn-pan" class="secondary">1-Finger Pan</button>
+            </div>
+
+            <div class="controls-grid-3">
+                <button id="btn-add-rect">+ Rect</button>
+                <button id="btn-add-circle">+ Circle</button>
+                <button id="btn-add-tri">+ Triangle</button>
+                <button id="btn-add-right-tri">+ Right Tri</button>
+                <button id="btn-add-measure" style="grid-column: span 2;">+ Measure Line</button>
+            </div>
+            
+            <div class="controls-grid-3" style="margin-top: 10px;">
+                <button id="btn-snap" class="active">Snap: ON</button>
+                <button id="btn-grid" class="active">Grid: ON</button>
+                <button id="btn-measure-toggle" class="active">Dims: ON</button>
+            </div>
+            <div class="controls-grid" style="margin-top: 6px;">
+                <button class="secondary" id="btn-text-minus">Text -</button>
+                <button class="secondary" id="btn-text-plus">Text +</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>Object List (Layers)</h3>
+            <div id="object-list-container">
+                </div>
+        </div>
+
+        <div class="section" id="properties-panel">
+            <h3>Properties</h3>
+            <div class="controls-grid">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="prop-name" placeholder="e.g., CNC Router">
+                </div>
+                <div class="form-group">
+                    <label>Color</label>
+                    <input type="color" id="prop-color" value="#3498db">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Designation (Type)</label>
+                <select id="prop-type">
+                    <option value="zone">Zone (Semi-Transparent)</option>
+                    <option value="object">Object (Opaque)</option>
+                    <option value="room">Room / Wall (Outline)</option>
+                    <option value="measurement">Measurement Arrow</option>
+                    <option value="blueprint">Blueprint Image</option>
+                </select>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="prop-lock-aspect" checked>
+                <label for="prop-lock-aspect" style="margin:0;">Lock Aspect Ratio</label>
+            </div>
+
+            <div class="controls-grid">
+                <div class="form-group">
+                    <label>Width (Units)</label>
+                    <input type="number" step="0.1" id="prop-width">
+                </div>
+                <div class="form-group">
+                    <label>Length/Height (Units)</label>
+                    <input type="number" step="0.1" id="prop-height">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Border Thickness</label>
+                <input type="number" step="1" id="prop-thickness" value="2" min="0">
+            </div>
+
+            <div class="form-group">
+                <label>Rotation (Degrees)</label>
+                <div style="display: flex; gap: 5px;">
+                    <input type="number" id="prop-angle">
+                    <button class="secondary" style="margin: 0; width: 60px;" id="btn-rotate-45">+45°</button>
+                </div>
+            </div>
+
+            <div class="controls-grid" style="margin-top: 15px;">
+                <button class="secondary" id="btn-duplicate">Duplicate</button>
+                <button class="secondary" id="btn-group">Group / Ungroup</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>File & Export</h3>
+            <div class="form-group">
+                <label>Project Name</label>
+                <input type="text" id="project-name" placeholder="e.g., Bellco Shop">
+            </div>
+            <div class="file-upload-wrapper">
+                <button class="secondary">Load Blueprint Image</button>
+                <input type="file" id="bg-upload" accept="image/*">
+            </div>
+            <div class="controls-grid" style="margin-top: 10px;">
+                <button id="btn-save-json">Save (JSON)</button>
+                <div class="file-upload-wrapper" style="margin-bottom: 0;">
+                    <button>Load (JSON)</button>
+                    <input type="file" id="json-upload" accept=".json">
+                </div>
+            </div>
+            <button class="danger" style="margin-top: 10px;" id="btn-clear-all">Clear All Canvas</button>
+        </div>
+    </div>
+
+    <div id="workspace">
+        <canvas id="c"></canvas>
+    </div>
+
+    <div class="modal-overlay" id="help-modal">
+        <div class="modal-content">
+            <button class="close-btn" id="btn-close-help">Close</button>
+            <h2>Layout Configurator - Comprehensive User Manual</h2>
+            
+            <h3>About This Application</h3>
+            <p>The <strong>Layout Configurator</strong> is a lightweight, interactive 2D layout planning tool. It is designed to help you easily draft and visualize floor plans, workshop arrangements, office spaces, and equipment configurations. With this tool, you can create designated zones, place solid objects, upload movable blueprint images, and annotate your plans with dynamic measurement lines. Your work can be saved locally and reloaded later for ongoing project management.</p>
+            
+            <h3>1. Global Controls (Top Bar)</h3>
+            <ul>
+                <li><strong>Help:</strong> Opens this comprehensive user manual.</li>
+                <li><strong>Undo:</strong> Reverts the canvas to the state before your last action.</li>
+                <li><strong>Redo:</strong> Reapplies an action that was just undone.</li>
+            </ul>
+
+            <h3>2. Navigation & Viewport</h3>
+            <ul>
+                <li><strong>Zoom In / Zoom Out:</strong> Click these buttons to adjust the scale of the entire workspace.</li>
+                <li><strong>Desktop Panning:</strong> Hold the <b>Alt key</b> on your keyboard and click-drag anywhere on the canvas to pan (move your view) around the workspace. You can also use your mouse's scroll wheel to Zoom in and out dynamically.</li>
+                <li><strong>Mobile Touch Navigation:</strong> Use a two-finger pinch gesture to Zoom in or out. Use a two-finger drag to Pan the workspace natively without interacting with objects.</li>
+                <li><strong>1-Finger Pan (Toggle):</strong> Tap this button to lock the canvas objects. While active, the button turns yellow, and you can drag across the screen with a single finger (or click-drag with a mouse) to pan your view. Tap again to return to selection and editing mode.</li>
+            </ul>
+
+            <h3>3. Adding & Managing Objects</h3>
+            <ul>
+                <li><strong>+ Rect, + Circle, + Triangle, + Right Tri:</strong> Click these buttons to drop new geometric shapes directly into the center of your current view.</li>
+                <li><strong>+ Measure Line:</strong> Drops a 1-dimensional measuring tool. This line has arrowheads on both ends and locks its vertical thickness. When stretched horizontally, the text label dynamically updates to show the real-time exact length. </li>
+                <li><strong>Object List (Layers Menu):</strong> This section displays all items currently on your canvas, acting as a Z-index hierarchy.
+                    <br>- <strong>Select:</strong> Click an item's text name in the list to select it on the canvas.
+                    <br>- <strong>Lock (🔒 / 🔓):</strong> Click the padlock icon to lock an item. Locked items cannot be clicked, moved, rotated, or resized.
+                    <br>- <strong>Reorder (▲ / ▼):</strong> Click the up or down arrows to move the item up or down in the layer stack.
+                    <br>- <strong>Delete (X):</strong> Click the red X to permanently remove the item.
+                    <br>- <strong>Drag-and-Drop <em>(Desktop)</em>:</strong> Click and drag a row in the list to rapidly reorganize your layers.
+                </li>
+                <li><strong>Duplicate & Grouping:</strong> Select an object and click "Duplicate" to clone it quickly. You can also drag a selection box around multiple objects (or hold Shift while clicking) and use the "Group / Ungroup" button to bind them together.</li>
+            </ul>
+
+            <h3>4. View Toggles & Settings</h3>
+            <ul>
+                <li><strong>Snap (ON/OFF):</strong> When enabled, moving and resizing objects will automatically snap them to the hidden 20-unit grid increments. Rotation will snap to precise 45-degree increments.</li>
+                <li><strong>Grid (ON/OFF):</strong> Toggles the visual rendering of the background grid lines.</li>
+                <li><strong>Dims (ON/OFF):</strong> Toggles the visibility of all on-canvas dimension overlays and custom name badges.</li>
+                <li><strong>Text - / Text +:</strong> Decreases or increases the global font size for all measurement text and name badges.</li>
+            </ul>
+
+            <h3>5. Properties Panel</h3>
+            <p>Select any unlocked object on the canvas to reveal its customizable properties.</p>
+            <ul>
+                <li><strong>Name:</strong> Type a custom label (e.g., "Main Workbench").</li>
+                <li><strong>Color:</strong> Click the color swatch to open your device's native color picker.</li>
+                <li><strong>Designation (Type):</strong> Changes the visual style of the shape (Zone, Object, Room, Measurement, or Blueprint).</li>
+                <li><strong>Lock Aspect Ratio:</strong> When checked, typing a new Width will automatically calculate and update the Height to maintain proportions.</li>
+                <li><strong>Dimensions (Width / Height):</strong> Type an exact number (in units/feet) to instantly resize an object.</li>
+                <li><strong>Border Thickness:</strong> Adjust the stroke width for outlines and borders.</li>
+                <li><strong>Rotation (Degrees):</strong> Type a specific angle, or click the <b>+45°</b> quick-turn button.</li>
+            </ul>
+
+            <h3>6. File & Export</h3>
+            <ul>
+                <li><strong>Project Name:</strong> Type your project's title here. It will be used to automatically generate the filename.</li>
+                <li><strong>Load Blueprint Image:</strong> Upload a `.jpg` or `.png` of a real floorplan.</li>
+                <li><strong>Save / Load (JSON):</strong> Save your layout data to your local device, or load a previous file.</li>
+                <li><strong>Clear All Canvas:</strong> Wipes all objects from your workspace. Click twice to confirm.</li>
+            </ul>
+
+            <h3>7. Keyboard Shortcuts</h3>
+            <ul>
+                <li><strong>Delete / Backspace:</strong> Deletes the currently selected object(s).</li>
+                <li><strong>Ctrl + Z:</strong> Undo the last action.</li>
+                <li><strong>Ctrl + Y:</strong> Redo the last undone action.</li>
+                <li><strong>Ctrl + D:</strong> Duplicate the currently selected object(s).</li>
+                <li><strong>Shift + Click:</strong> Select multiple objects sequentially.</li>
+            </ul>
+        </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>
