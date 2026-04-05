@@ -26,7 +26,6 @@
             touch-action: none;
         }
 
-        /* --- TOOLBAR --- */
         #toolbar {
             width: 340px; background-color: var(--bg-panel);
             display: flex; flex-direction: column;
@@ -51,15 +50,12 @@
         button.success { background-color: var(--success); }
         button.active { background-color: var(--accent); box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
 
-        /* --- CLOUD SECTION --- */
         #auth-status { font-size: 0.8rem; margin-bottom: 8px; color: var(--primary); font-weight: bold; }
         .hidden { display: none !important; }
 
-        /* --- WORKSPACE --- */
         #workspace { flex-grow: 1; position: relative; background-color: #f1f2f6; overflow: hidden; }
         canvas { border: 1px solid #ccc; }
 
-        /* --- PROPERTIES PANEL --- */
         #properties-panel {
             position: absolute; top: 10px; right: -300px;
             width: 260px; background: white; padding: 15px;
@@ -73,7 +69,6 @@
             width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;
         }
 
-        /* --- OBJECT LIST --- */
         #object-list-container { max-height: 200px; overflow-y: auto; }
         .list-item {
             display: flex; justify-content: space-between; align-items: center;
@@ -81,10 +76,8 @@
             margin-bottom: 4px; border-radius: 4px; font-size: 0.85rem;
             cursor: pointer;
         }
-        .list-item.dragging { opacity: 0.5; border: 2px dashed var(--accent); }
         .layer-btn-group button { padding: 2px 6px; font-size: 0.7rem; margin-left: 2px; }
 
-        /* --- MODALS --- */
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.7); display: none;
@@ -97,7 +90,7 @@
         }
         .close-btn { position: absolute; top: 10px; right: 10px; background: none; color: #999; font-size: 1.5rem; }
 
-        .auth-form input { margin-bottom: 15px; padding: 12px; font-size: 1rem; }
+        .auth-form input { margin-bottom: 15px; padding: 12px; font-size: 1rem; width: 100%; box-sizing: border-box;}
         .auth-toggle { text-align: center; margin-top: 15px; font-size: 0.9rem; color: var(--accent); cursor: pointer; }
     </style>
 </head>
@@ -179,7 +172,6 @@
 
     <div id="workspace">
         <canvas id="c"></canvas>
-
         <div id="properties-panel">
             <div class="section-title">Object Properties</div>
             <div class="prop-group">
@@ -225,10 +217,10 @@
         <div class="modal-content">
             <button class="close-btn" id="btn-close-auth">×</button>
             <h2 id="auth-title">Log In</h2>
-            <div class="auth-form" style="display: flex; flex-direction: column;">
+            <div class="auth-form">
                 <input type="email" id="auth-email" placeholder="Email Address">
                 <input type="password" id="auth-password" placeholder="Password">
-                <button class="primary" id="btn-auth-submit">Continue</button>
+                <button class="primary" id="btn-auth-submit" style="width: 100%;">Continue</button>
             </div>
             <div class="auth-toggle" id="auth-toggle-text">Don't have an account? Sign Up</div>
         </div>
@@ -244,8 +236,6 @@
             <p><strong>1-Finger Pan Toggle:</strong> Mobile Pan</p>
             <p><strong>Ctrl+D:</strong> Duplicate Selected</p>
             <p><strong>Ctrl+Z / Y:</strong> Undo / Redo</p>
-            <hr>
-            <p>Your work is now saveable to the Cloud! Create an account to access your projects from any device.</p>
         </div>
     </div>
 
