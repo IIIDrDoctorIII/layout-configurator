@@ -1,11 +1,12 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  server: {
-    open: true, // Automatically opens your browser when you run the server
+  optimizeDeps: {
+    include: ['fabric']
   },
   build: {
-    outDir: 'dist',
-    sourcemap: true,
+    commonjsOptions: {
+      include: [/fabric/, /node_modules/]
+    }
   }
 });

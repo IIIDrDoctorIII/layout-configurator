@@ -1,18 +1,16 @@
 // src/canvas.js
-import { fabric } from 'fabric';
+import * as fabric from 'fabric';
 import { saveState } from './state.js';
 
 export const GRID_SIZE = 20;
 export const CANVAS_WIDTH = 3000;
 export const CANVAS_HEIGHT = 2000;
 
-// Global Toggles
 export let isSnapping = true;
 export let showGrid = true;
 export let showMeasurements = true;
 export let globalTextSize = 12;
 
-// Initialize Canvas
 export const canvas = new fabric.Canvas('c', { 
     backgroundColor: '#ffffff', 
     preserveObjectStacking: true, 
@@ -22,7 +20,6 @@ export const canvas = new fabric.Canvas('c', {
 export let gridGroup = null;
 
 export function drawGrid() {
-    // 1. Aggressively purge any rogue grids loaded from bad JSON files
     canvas.getObjects().forEach(obj => {
         if (obj.id === 'grid_overlay') canvas.remove(obj);
     });
@@ -44,19 +41,20 @@ export function drawGrid() {
     });
     
     canvas.add(gridGroup);
-    gridGroup.sendToBack();
+    canvas.sendObjectToBack(gridGroup); // V6 Stacking Syntax
 }
 
 export function resizeCanvas() {
     const workspace = document.getElementById('workspace');
     if (workspace) {
-        canvas.setWidth(workspace.clientWidth);
-        canvas.setHeight(workspace.clientHeight);
+        canvas.setDimensions({
+            width: workspace.clientWidth,
+            height: workspace.clientHeight
+        });
         canvas.renderAll();
     }
 }
 
-// Helper: Converts Hex colors to semi-transparent RGBA for "Zones"
 export function hexToRgbA(hex, alpha) {
     let c;
     if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
@@ -70,7 +68,6 @@ export function hexToRgbA(hex, alpha) {
 
 export function applyDesignationStyles(obj, designation) {
     obj.customDesignation = designation;
-    
     let baseColor = obj.customColor;
     if (!baseColor) {
         baseColor = designation === 'zone' ? '#2ecc71' : designation === 'room' ? '#2c3e50' : '#3498db';
@@ -148,7 +145,6 @@ export function addShape(shapeType) {
     canvas.setActiveObject(obj);
 }
 
-// --- Toggles & Adjustments ---
 export function toggleSnap() {
     isSnapping = !isSnapping;
     const btn = document.getElementById('btn-snap');
@@ -188,7 +184,6 @@ export function changeTextSize(delta) {
     canvas.requestRenderAll();
 }
 
-// --- Navigation State ---
 export let isPanMode = false;
 let isDragging = false;
 let lastPosX = 0;
@@ -215,7 +210,6 @@ export function togglePanMode() {
     canvas.requestRenderAll();
 }
 
-// Mouse Wheel Zoom & Alt-Drag Pan (Desktop)
 canvas.on('mouse:down', function(opt) { 
     if ((isPanMode || opt.e.altKey) && !opt.e.touches) { 
         isDragging = true; lastPosX = opt.e.clientX; lastPosY = opt.e.clientY; 
@@ -240,7 +234,6 @@ canvas.on('mouse:wheel', function(opt) {
     opt.e.preventDefault(); opt.e.stopPropagation();
 });
 
-// --- NATIVE MOBILE TOUCH GESTURES ---
 export function initTouchGestures() {
     const wrapper = document.querySelector('.canvas-container');
     if (!wrapper) return;
@@ -272,12 +265,10 @@ export function initTouchGestures() {
             const currentDistance = getTouchDistance(e.touches); 
             const currentMidpoint = getTouchMidpoint(e.touches);
             
-            // Handle Zoom
             let newZoom = touchState.initialZoom * (currentDistance / touchState.initialDistance);
             if (newZoom > 5) newZoom = 5; if (newZoom < 0.2) newZoom = 0.2;
             canvas.zoomToPoint({ x: currentMidpoint.x, y: currentMidpoint.y }, newZoom);
             
-            // Handle simultaneous 2-Finger Pan
             let vpt = canvas.viewportTransform;
             vpt[4] += currentMidpoint.x - touchState.lastMidpoint.x; 
             vpt[5] += currentMidpoint.y - touchState.lastMidpoint.y;
@@ -309,43 +300,55 @@ export function initTouchGestures() {
     }, { passive: false });
 }
 
-// Bind native touch gestures shortly after canvas initialization
 setTimeout(initTouchGestures, 200);
 
-// --- Utilities ---
-export function duplicateSelected(customPropsArray) {
+export async function duplicateSelected(customPropsArray) {
     const activeObject = canvas.getActiveObject();
     if (!activeObject) return;
-    activeObject.clone(function(cloned) {
+    
+    try {
+        // V6 Fix: clone is now promise-based
+        const cloned = await activeObject.clone(customPropsArray);
         canvas.discardActiveObject();
         cloned.set({ left: cloned.left + GRID_SIZE, top: cloned.top + GRID_SIZE, evented: true });
+        
         if (cloned.type === 'activeSelection') {
             cloned.canvas = canvas;
             cloned.forEachObject(function(obj) { canvas.add(obj); });
             cloned.setCoords();
         } else { canvas.add(cloned); }
+        
         cloned.customName = (activeObject.customName || 'Item') + ' (Copy)';
         canvas.setActiveObject(cloned);
         canvas.requestRenderAll();
-    }, customPropsArray);
+    } catch(err) {
+        console.error("Duplication error: ", err);
+    }
 }
 
 export function toggleGroup() {
     const activeObj = canvas.getActiveObject();
     if (!activeObj) return;
 
+    // V6 Fix: manual grouping structure
     if (activeObj.type === 'activeSelection') {
-        activeObj.toGroup();
-        const newGroup = canvas.getActiveObject();
-        newGroup.set({ customName: 'Grouped Objects', customDesignation: 'object', customLocked: false });
+        const items = activeObj.getObjects();
+        const group = new fabric.Group(items, { customName: 'Grouped Objects', customDesignation: 'object', customLocked: false });
+        canvas.remove(...items);
+        canvas.discardActiveObject();
+        canvas.add(group);
+        canvas.setActiveObject(group);
         canvas.requestRenderAll();
     } else if (activeObj.type === 'group' && activeObj.id !== 'grid_overlay') {
-        activeObj.toActiveSelection();
+        const items = activeObj.removeAll();
+        canvas.remove(activeObj);
+        canvas.add(...items);
+        const sel = new fabric.ActiveSelection(items, { canvas });
+        canvas.setActiveObject(sel);
         canvas.requestRenderAll();
     }
 }
 
-// Text Rendering
 function drawBadgeText(ctx, text, x, y, size) {
     if(!text) return;
     ctx.font = `bold ${size}px sans-serif`;
@@ -434,7 +437,6 @@ canvas.on('after:render', function() {
     ctx.restore();
 });
 
-// --- Snap to Grid Hooks ---
 canvas.on('object:moving', function(options) {
     if (!isSnapping) return;
     options.target.set({ left: Math.round(options.target.left / GRID_SIZE) * GRID_SIZE, top: Math.round(options.target.top / GRID_SIZE) * GRID_SIZE });
@@ -474,7 +476,6 @@ canvas.on('object:rotating', function(options) {
     options.target.set({ angle: Math.round(options.target.angle / 45) * 45 });
 });
 
-// --- State Save Hooks ---
 canvas.on('object:added', function(e) { 
     if(e.target.id !== 'grid_overlay') saveState(); 
 });

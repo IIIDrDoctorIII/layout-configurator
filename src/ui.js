@@ -1,11 +1,10 @@
 // src/ui.js
+import * as fabric from 'fabric';
 import { canvas, addShape, applyDesignationStyles, GRID_SIZE, gridGroup, zoomCanvas, togglePanMode, duplicateSelected, toggleGroup, getCenterPoint, toggleSnap, toggleGridVisuals, toggleMeasurements, changeTextSize } from './canvas.js';
 import { undo, redo, exportJSON, loadJSON, setHistoryCallback, customProps, saveState, saveToCloud } from './state.js';
 import { signIn, signUp, signOut, onAuthStateChange } from './auth.js';
-import { fabric } from 'fabric';
 
 export function setupUI() {
-    // --- Auth UI Logic ---
     const authModal = document.getElementById('auth-modal');
     const authTitle = document.getElementById('auth-title');
     const authToggleText = document.getElementById('auth-toggle-text');
@@ -43,7 +42,6 @@ export function setupUI() {
 
     document.getElementById('btn-logout').addEventListener('click', signOut);
 
-    // Track User State
     onAuthStateChange((user) => {
         const statusText = document.getElementById('auth-status');
         const loggedInGroup = document.getElementById('logged-in-group');
@@ -60,26 +58,22 @@ export function setupUI() {
         }
     });
 
-    // --- Cloud Actions ---
     document.getElementById('btn-save-cloud').addEventListener('click', async () => {
         const projectName = document.getElementById('project-name').value || 'Untitled Layout';
         await saveToCloud(projectName);
     });
 
-    // --- Help Modal ---
     const helpModal = document.getElementById('help-modal');
     const toggleHelp = () => helpModal.classList.toggle('active');
     document.getElementById('btn-help').addEventListener('click', toggleHelp);
     document.getElementById('btn-close-help').addEventListener('click', toggleHelp);
 
-    // --- Shape Buttons ---
     document.getElementById('btn-add-rect').addEventListener('click', () => addShape('rect'));
     document.getElementById('btn-add-circle').addEventListener('click', () => addShape('circle'));
     document.getElementById('btn-add-tri').addEventListener('click', () => addShape('triangle'));
     document.getElementById('btn-add-right-tri').addEventListener('click', () => addShape('right-triangle'));
     document.getElementById('btn-add-measure').addEventListener('click', () => addShape('measure'));
 
-    // --- Canvas Hooks ---
     canvas.on('selection:created', updatePropertiesUI);
     canvas.on('selection:updated', updatePropertiesUI);
     canvas.on('selection:cleared', updatePropertiesUI);
@@ -88,7 +82,6 @@ export function setupUI() {
     canvas.on('object:added', updateObjectList);
     canvas.on('object:removed', updateObjectList);
 
-    // --- Properties Panel ---
     const aspectLock = document.getElementById('prop-lock-aspect');
     canvas.uniScaleTransform = !aspectLock.checked;
     aspectLock.addEventListener('change', (e) => {
@@ -137,7 +130,6 @@ export function setupUI() {
         }
     });
 
-    // --- History & Navigation ---
     const btnUndo = document.getElementById('btn-undo');
     const btnRedo = document.getElementById('btn-redo');
     btnUndo.addEventListener('click', undo);
@@ -157,14 +149,16 @@ export function setupUI() {
     document.getElementById('btn-text-minus').addEventListener('click', () => changeTextSize(-1));
     document.getElementById('btn-text-plus').addEventListener('click', () => changeTextSize(1));
 
-    // --- Files ---
     document.getElementById('btn-save-json').addEventListener('click', () => exportJSON(document.getElementById('project-name').value));
     document.getElementById('json-upload').addEventListener('change', (e) => loadJSON(e.target.files[0]));
+    
+    // V6 Fix: Modern image loading with Promises
     document.getElementById('bg-upload').addEventListener('change', function(e) {
         const file = e.target.files[0]; if (!file) return;
         const reader = new FileReader();
-        reader.onload = function(f) {
-            fabric.Image.fromURL(f.target.result, function(img) {
+        reader.onload = async function(f) {
+            try {
+                const img = await fabric.FabricImage.fromURL(f.target.result);
                 const pt = getCenterPoint();
                 let scale = (canvas.width * 0.4) / img.width;
                 img.set({
@@ -173,15 +167,21 @@ export function setupUI() {
                     customName: 'Blueprint', customDesignation: 'blueprint', customLocked: false
                 });
                 img.set({ originX: 'left', originY: 'top', left: pt.x - (img.width*scale)/2, top: pt.y - (img.height*scale)/2 });
-                canvas.add(img); canvas.sendToBack(img);
-                if (gridGroup) canvas.sendToBack(gridGroup);
-                canvas.setActiveObject(img); saveState(); updateObjectList();
-            });
+                
+                canvas.add(img); 
+                canvas.sendObjectToBack(img);
+                if (gridGroup) canvas.sendObjectToBack(gridGroup);
+                
+                canvas.setActiveObject(img); 
+                saveState(); 
+                updateObjectList();
+            } catch (err) {
+                console.error("Blueprint load failed", err);
+            }
         };
         reader.readAsDataURL(file);
     });
 
-    // --- Utilities ---
     document.getElementById('btn-duplicate').addEventListener('click', () => { duplicateSelected(customProps); saveState(); updateObjectList(); });
     document.getElementById('btn-group').addEventListener('click', () => { toggleGroup(); saveState(); updatePropertiesUI(); updateObjectList(); });
 
@@ -199,7 +199,6 @@ export function setupUI() {
         }
     });
 
-    // --- Keyboard Shortcuts ---
     window.addEventListener('keydown', (e) => {
         if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') return;
         if (e.key === 'Delete' || e.key === 'Backspace') { 
@@ -272,23 +271,87 @@ export function updateObjectList() {
     const objects = [...canvas.getObjects()].reverse();
     objects.forEach((obj) => {
         if (obj.id === 'grid_overlay' || obj === canvas.backgroundImage) return;
+        
         let li = document.createElement('div');
-        li.className = 'list-item'; li.draggable = true; li.canvasObj = obj;
-        if(canvas.getActiveObject() === obj) { li.style.backgroundColor = '#dff9fb'; li.style.borderLeft = '3px solid #3498db'; }
+        li.className = 'list-item';
+        li.draggable = true;
+        li.canvasObj = obj;
+        
+        if(canvas.getActiveObject() === obj) {
+            li.style.backgroundColor = '#dff9fb';
+            li.style.borderLeft = '3px solid #3498db';
+        }
+        
         let name = document.createElement('span');
         name.innerText = obj.customName || `Unnamed ${obj.type}`;
-        name.onclick = () => { if (!obj.customLocked) { canvas.setActiveObject(obj); canvas.requestRenderAll(); } };
+        name.onclick = () => {
+            if (!obj.customLocked) {
+                canvas.setActiveObject(obj);
+                canvas.requestRenderAll();
+            }
+        };
+        
         let btns = document.createElement('div');
         btns.className = 'layer-btn-group';
+        
         let lock = document.createElement('button');
         lock.innerText = obj.customLocked ? '🔒' : '🔓';
-        lock.onclick = (e) => { e.stopPropagation(); obj.customLocked = !obj.customLocked; if (obj.customLocked && canvas.getActiveObject() === obj) canvas.discardActiveObject(); applyDesignationStyles(obj, obj.customDesignation || 'object'); saveState(); updateObjectList(); };
-        let up = document.createElement('button'); up.innerText = '▲'; up.onclick = (e) => { e.stopPropagation(); canvas.bringForward(obj); canvas.requestRenderAll(); saveState(); };
-        let down = document.createElement('button'); down.innerText = '▼'; down.onclick = (e) => { e.stopPropagation(); canvas.sendBackwards(obj); if (gridGroup) canvas.sendToBack(gridGroup); canvas.requestRenderAll(); saveState(); };
-        let del = document.createElement('button'); del.innerText = 'X'; del.className = 'danger'; del.onclick = (e) => { e.stopPropagation(); canvas.remove(obj); canvas.discardActiveObject(); saveState(); };
+        lock.onclick = (e) => {
+            e.stopPropagation();
+            obj.customLocked = !obj.customLocked;
+            if (obj.customLocked && canvas.getActiveObject() === obj) canvas.discardActiveObject();
+            applyDesignationStyles(obj, obj.customDesignation || 'object');
+            saveState();
+            updateObjectList();
+        };
+        
+        // V6 Fix: Modern Layer Stacking Syntax
+        let up = document.createElement('button');
+        up.innerText = '▲';
+        up.onclick = (e) => { e.stopPropagation(); canvas.bringObjectForward(obj); canvas.requestRenderAll(); saveState(); };
+        
+        let down = document.createElement('button');
+        down.innerText = '▼';
+        down.onclick = (e) => { e.stopPropagation(); canvas.sendObjectBackwards(obj); if (gridGroup) canvas.sendObjectToBack(gridGroup); canvas.requestRenderAll(); saveState(); };
+        
+        let del = document.createElement('button');
+        del.innerText = 'X';
+        del.className = 'danger';
+        del.onclick = (e) => { e.stopPropagation(); canvas.remove(obj); canvas.discardActiveObject(); saveState(); };
+        
         btns.appendChild(lock); btns.appendChild(up); btns.appendChild(down); btns.appendChild(del);
         li.appendChild(name); li.appendChild(btns);
-        // Drag events omitted for brevity in snippet, but preserved in logic
+        
+        li.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', objects.indexOf(obj));
+            li.classList.add('dragging');
+        });
+        li.addEventListener('dragend', () => {
+            li.classList.remove('dragging');
+            document.querySelectorAll('.list-item').forEach(item => item.style.borderBottom = '1px solid #eee');
+        });
+        li.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            li.style.borderBottom = '2px solid #3498db';
+        });
+        li.addEventListener('dragleave', () => {
+            li.style.borderBottom = '1px solid #eee';
+        });
+        li.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const draggedIdx = parseInt(e.dataTransfer.getData('text/plain'));
+            const targetIdx = objects.indexOf(obj);
+            if (draggedIdx !== targetIdx) {
+                const draggedObj = objects[draggedIdx];
+                // V6 Fix: moveObjectTo
+                canvas.moveObjectTo(draggedObj, objects.length - 1 - targetIdx);
+                if (gridGroup) canvas.sendObjectToBack(gridGroup);
+                canvas.requestRenderAll();
+                saveState();
+                updateObjectList();
+            }
+        });
+        
         container.appendChild(li);
     });
 }
